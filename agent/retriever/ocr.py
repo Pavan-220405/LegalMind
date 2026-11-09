@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from config import settings
+
 
 class OCRError(RuntimeError):
     """Raised when OCR is required but cannot be completed."""
@@ -26,7 +28,7 @@ def run_ocrmypdf(
     also handles pages with a tiny or corrupt text layer.
     """
 
-    configured = os.getenv("OCRMY_PDF_COMMAND", "ocrmypdf")
+    configured = settings.ocrmypdf_command
     executable = shutil.which(configured)
     if executable is None and Path(configured).exists():
         executable = str(Path(configured))
@@ -53,11 +55,11 @@ def run_ocrmypdf(
     ]
     # Keep Hindi enabled by default so OCR does not silently lose Devanagari.
     # Install hin.traineddata or override OCR_LANGUAGE for English-only sources.
-    language = os.getenv("OCR_LANGUAGE", "eng+hin").strip()
+    language = settings.ocr_language
     if language:
         command[1:1] = ["--language", language]
     environment = os.environ.copy()
-    tesseract_command = os.getenv("TESSERACT_CMD", "")
+    tesseract_command = settings.tesseract_cmd or ""
     tesseract_candidates = [
         Path(tesseract_command) if tesseract_command else None,
         Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe"),

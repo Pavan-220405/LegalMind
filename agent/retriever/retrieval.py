@@ -13,13 +13,14 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
 import re
 from functools import lru_cache
 from typing import Any, Callable, Iterable, Sequence
 
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
+
+from config import settings
 
 try:
     from langchain_classic.retrievers.multi_query import (
@@ -33,7 +34,6 @@ from .config import (
     BM25_CANDIDATES,
     DENSE_WEIGHT,
     BM25_WEIGHT,
-    LLM_PROVIDER,
     MULTI_QUERY_COUNT,
     MULTI_QUERY_ENABLED,
     RERANKER_ENABLED,
@@ -218,12 +218,15 @@ def _preserves_query_terms(candidate: str, original: str) -> bool:
 def get_query_expansion_llm():
     """Build the configured LLM only when MultiQuery is actually enabled."""
 
-    if LLM_PROVIDER == "groq":
+    if settings.legal_rag_llm_provider == "groq":
         try:
             from langchain_groq import ChatGroq
         except ImportError as exc:  # pragma: no cover
             raise RuntimeError("Install langchain-groq for Groq query expansion") from exc
-        return ChatGroq(model=os.getenv("SMALL_MODEL", "llama-3.1-8b-instant"))
+        return ChatGroq(
+            model=settings.small_model,
+            api_key=settings.groq_api_key,
+        )
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI
     except ImportError as exc:  # pragma: no cover
@@ -231,8 +234,9 @@ def get_query_expansion_llm():
             "Install langchain-google-genai for Google query expansion"
         ) from exc
     return ChatGoogleGenerativeAI(
-        model=os.getenv("SMALL_MODEL", "gemini-2.0-flash"),
+        model=settings.small_model,
         temperature=0,
+        google_api_key=settings.google_api_key,
     )
 
 
@@ -336,11 +340,15 @@ class CohereReranker:
                 raise RuntimeError(
                     "Install langchain-cohere to use Cohere reranking"
                 ) from exc
-            if not os.getenv("COHERE_API_KEY"):
+            if not settings.cohere_api_key:
                 raise RuntimeError("Set COHERE_API_KEY to use the Cohere reranker")
             # Keep the provider client reusable. We request all candidate ranks;
             # the local top_k controls the documents returned to the caller.
-            self._compressor = CohereRerank(model=self.model_name, top_n=None)
+            self._compressor = CohereRerank(
+                model=self.model_name,
+                top_n=None,
+                cohere_api_key=settings.cohere_api_key,
+            )
         return self._compressor
 
     def rank(
@@ -378,9 +386,13 @@ class VoyageReranker:
                 raise RuntimeError(
                     "Install langchain-voyageai to use Voyage AI reranking"
                 ) from exc
-            if not os.getenv("VOYAGE_API_KEY"):
+            if not settings.voyage_api_key:
                 raise RuntimeError("Set VOYAGE_API_KEY to use the Voyage AI reranker")
-            self._compressor = VoyageAIRerank(model=self.model_name, top_k=None)
+            self._compressor = VoyageAIRerank(
+                model=self.model_name,
+                top_k=None,
+                api_key=settings.voyage_api_key,
+            )
         return self._compressor
 
     def rank(

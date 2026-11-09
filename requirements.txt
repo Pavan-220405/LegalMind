@@ -30,6 +30,7 @@ ocrmypdf
 
 # ── Data Validation ────────────────────────────
 pydantic
+pydantic-settings
 
 # ── Backend ────────────────────────────────────
 fastapi

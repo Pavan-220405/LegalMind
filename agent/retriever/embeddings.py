@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 
-from dotenv import load_dotenv
-
-load_dotenv()
+from config import settings
 
 
 DEFAULT_EMBEDDING_MODEL = "BAAI/bge-m3"
@@ -16,7 +13,7 @@ DEFAULT_EMBEDDING_MODEL = "BAAI/bge-m3"
 def get_embedding_model_name() -> str:
     """Return the model identifier used in IDs and migration metadata."""
 
-    return os.getenv("HF_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL)
+    return settings.hf_embedding_model
 
 
 @lru_cache(maxsize=1)
@@ -31,19 +28,16 @@ def get_embeddings():
             "sentence-transformers. Install requirements.txt and retry."
         ) from exc
 
-    token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN")
-    device = os.getenv("HF_EMBEDDING_DEVICE", "cpu")
-    batch_size = int(os.getenv("HF_EMBEDDING_BATCH_SIZE", "8"))
-    model_kwargs: dict[str, str] = {"device": device}
-    if token:
-        model_kwargs["token"] = token
+    model_kwargs: dict[str, str] = {"device": settings.hf_embedding_device}
+    if settings.hf_token:
+        model_kwargs["token"] = settings.hf_token
 
     return HuggingFaceEmbeddings(
         model_name=get_embedding_model_name(),
         model_kwargs=model_kwargs,
         encode_kwargs={
             "normalize_embeddings": True,
-            "batch_size": batch_size,
+            "batch_size": settings.hf_embedding_batch_size,
         },
     )
 

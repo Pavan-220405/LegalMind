@@ -1,0 +1,42 @@
+[project]
+name = "ai-lawyer"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Pavan G", email = "pavan220405@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "python-dotenv",
+    "langchain",
+    "langchain-core",
+    "langchain-community",
+    "langchain-classic",
+    "langchain-chroma",
+    "chromadb",
+    "rank-bm25",
+    "langchain-google-genai",
+    "langchain-groq",
+    "langgraph",
+    "langgraph-checkpoint-postgres",
+    "psycopg[binary]",
+    "pydantic",
+    "pydantic-settings",
+    "langchain-huggingface",
+    "sentence-transformers",
+    "langchain-cohere",
+    "langchain-voyageai",
+    "streamlit",
+    "pillow",
+    "pymupdf",
+    "pytesseract",
+    "ocrmypdf",
+]
+
+[project.scripts]
+ai-lawyer = "ai_lawyer:main"
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"

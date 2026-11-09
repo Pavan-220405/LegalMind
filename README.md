@@ -16,6 +16,12 @@ Voyage reranking requires `VOYAGE_API_KEY`.
 
 ## Configuration
 
+Application settings are loaded once from the project-root `.env` into the
+shared `settings` object in [config.py](config.py). Workflow, retrieval,
+embeddings, OCR, and the Streamlit app read configuration from this object.
+Restart the process after changing `.env`. The older
+`agent.retriever.config` module re-exports aliases for compatibility.
+
 ```text
 VECTOR_DB=chroma
 CHROMA_PERSIST_DIRECTORY=./data/chroma
@@ -32,6 +38,9 @@ RERANKER_MODEL=rerank-v5.0-fast
 VOYAGE_RERANKER_MODEL=rerank-3-lite
 RERANK_TOP_K=6
 HF_EMBEDDING_MODEL=BAAI/bge-m3
+LEGAL_RAG_LLM_PROVIDER=groq
+LEGAL_MODEL=openai/gpt-oss-20b
+SMALL_MODEL=openai/gpt-oss-20b
 ```
 
 `CONSUMER_COLLECTION_NAME`, `LABOUR_COLLECTION_NAME`, and
@@ -93,6 +102,58 @@ results = retrieve_documents(
 Lower-level components are `HybridRetriever`, `LegalMultiQueryRetriever`,
 `CohereReranker`, and `VoyageReranker` in `agent.retriever.retrieval`.
 
+## Legal assistance workflow
+
+`agent.workflow.build_legal_workflow` assembles the structured supervisor,
+domain routing, rent/consumer/wages retrieval agents, general fallback, drafting,
+phase-one compliance, and final conversation node. Model and retrieval
+dependencies are injectable. The supervisor routes uncertain or low-confidence
+domains to a focused clarification turn. Retrieval is restricted to the selected
+domain collection.
+
+For local use, configure `LEGAL_RAG_LLM_PROVIDER` as `groq` or `google`, set the
+corresponding provider key, and set `DATABASE_URL` to a PostgreSQL database.
+`agent.workflow.postgres_workflow()` opens the LangGraph PostgreSQL checkpointer
+and runs its setup migration. Invoke turns with a stable per-conversation
+`thread_id`:
+
+```python
+from agent.workflow import invoke_turn, postgres_workflow
+
+with postgres_workflow() as graph:
+    result = invoke_turn(
+        graph,
+        thread_id="conversation-123",
+        user_message="My landlord has not returned my security deposit.",
+    )
+    print(result["final_response"])
+```
+
+### Streamlit pipeline playground
+
+Run the interactive pipeline check from the repository root:
+
+```powershell
+streamlit run frontend/app.py
+```
+
+The Streamlit browser session creates and retains its own thread ID. **New
+conversation** generates a different ID. The app opens in temporary in-memory
+mode so you can try the pipeline immediately; choose PostgreSQL for durable
+checkpoints once the configured database exists and is reachable. In-memory
+checkpoints are cleared when the app process stops. The sidebar shows Chroma
+collection counts; ingest the legal PDFs first if the collections are empty.
+
+Conversation messages use LangGraph's `messages` reducer and are persisted in
+the checkpoint; there is no separate manually maintained history field. The
+workflow's limitation check is a cautionary heuristic: it only compares an
+explicitly parsed date for consumer complaints and always reports the Consumer
+Protection Act section 69 exception and verification warning. Rent, wages, and
+other limitation periods remain unclear pending local legal review. Compliance
+currently audits citations, limitation warnings, urgency, and the general
+fallback disclaimer; unsupported claims and addressee/jurisdiction checks are
+future work.
+
 ## Testing
 
 ```powershell
@@ -101,4 +162,6 @@ python -m unittest discover -s tests -v
 
 Ordinary retrieval tests use synthetic documents and injected fake LLMs and
 rerankers; the Chroma persistence check uses an isolated temporary directory.
+The workflow integration test uses fake models and an in-memory checkpointer,
+so it does not require provider API keys or a running PostgreSQL instance.
 Manual query cases are listed in `docs/retrieval_test_cases.md`.
