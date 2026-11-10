@@ -16,13 +16,29 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# Disable optional LangSmith tracing for this user-facing app, even when the
-# hosting environment has tracing variables configured globally.
-for _tracing_variable in (
+# Load local .env configuration for the LangSmith SDK, while preserving
+# process environment and Streamlit secrets as higher-priority sources.
+try:
+    from dotenv import dotenv_values
+
+    for _name, _value in dotenv_values(PROJECT_ROOT / ".env").items():
+        if _value is not None:
+            os.environ.setdefault(_name, _value)
+except Exception:
+    pass
+for _name in (
     "LANGSMITH_TRACING", "LANGSMITH_API_KEY", "LANGSMITH_ENDPOINT",
-    "LANGSMITH_PROJECT", "LANGSMITH_WORKSPACE_ID", "LANGCHAIN_TRACING_V2",
+    "LANGSMITH_PROJECT", "LANGSMITH_WORKSPACE_ID",
 ):
-    os.environ.pop(_tracing_variable, None)
+    try:
+        _value = st.secrets.get(_name)
+    except Exception:
+        _value = None
+    if _value is not None and str(_value).strip():
+        os.environ[_name] = str(_value).strip()
+
+if os.getenv("LANGSMITH_TRACING", "").strip().lower() in {"true", "1", "yes", "on"}:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
 
 LOGGER = logging.getLogger(__name__)
 
@@ -67,6 +83,54 @@ def _pdf_text(upload: Any) -> tuple[str, bool]:
         path = Path(temp_dir) / "upload.pdf"
         path.write_bytes(upload.getvalue())
         return extract_document_text(path)
+
+
+def _stream_turn_with_langsmith(
+    graph: Any,
+    *,
+    thread_id: str,
+    user_message: str,
+    uploaded_pdf_text: str,
+    turn_type: str,
+) -> Any:
+    """Emit a LangSmith run for the workflow when tracing is configured."""
+
+    from agent.workflow import stream_turn
+
+    enabled = os.getenv("LANGSMITH_TRACING", "").strip().lower() in {
+        "true", "1", "yes", "on"
+    }
+    api_key = os.getenv("LANGSMITH_API_KEY", "").strip()
+    if not enabled or not api_key:
+        yield from stream_turn(
+            graph,
+            thread_id=thread_id,
+            user_message=user_message,
+            uploaded_pdf_text=uploaded_pdf_text,
+            turn_type=turn_type,
+        )
+        return
+
+    import langsmith as ls
+
+    client = ls.Client(
+        api_key=api_key,
+        api_url=os.getenv("LANGSMITH_ENDPOINT", "").strip() or None,
+    )
+    project = os.getenv("LANGSMITH_PROJECT", "").strip() or None
+    with ls.tracing_context(
+        enabled=True,
+        client=client,
+        project_name=project,
+        metadata={"thread_id": thread_id},
+    ):
+        yield from stream_turn(
+            graph,
+            thread_id=thread_id,
+            user_message=user_message,
+            uploaded_pdf_text=uploaded_pdf_text,
+            turn_type=turn_type,
+        )
 
 
 def _message_text(content: Any) -> str:
@@ -190,6 +254,19 @@ def main() -> None:
     with st.sidebar:
         st.markdown('<div class="brand-mark">LEGALMIND · AI</div>', unsafe_allow_html=True)
         st.caption("Your private legal workspace")
+        with st.expander("LangSmith tracing", expanded=False):
+            tracing_enabled = os.getenv("LANGSMITH_TRACING", "").strip().lower() in {
+                "true", "1", "yes", "on"
+            }
+            has_api_key = bool(os.getenv("LANGSMITH_API_KEY", "").strip())
+            project = os.getenv("LANGSMITH_PROJECT", "").strip()
+            if tracing_enabled and has_api_key:
+                st.success("Tracing is enabled")
+                st.caption(f"Project: {project or 'default'}")
+            elif tracing_enabled:
+                st.warning("Tracing is enabled, but LANGSMITH_API_KEY is missing.")
+            else:
+                st.caption("Set LANGSMITH_TRACING=true and configure LANGSMITH_API_KEY to enable.")
         if st.button("New conversation", use_container_width=True):
             start_new_conversation(st.session_state)
             st.rerun()
@@ -253,9 +330,7 @@ def main() -> None:
                         for message in prior_messages
                     )
                     turn_type = "followup" if prior_messages else "new_problem"
-                    from agent.workflow import stream_turn
-
-                    for event in stream_turn(
+                    for event in _stream_turn_with_langsmith(
                         graph,
                         thread_id=thread_id,
                         user_message=prompt,
@@ -292,6 +367,15 @@ def main() -> None:
                             )
                             if payload.get("error") is not None:
                                 raise payload["error"]
+
+                    # LangChain sends traces on a background queue. Wait for the
+                    # queue so short-lived hosted workers can flush each turn.
+                    try:
+                        from langchain_core.tracers.langchain import wait_for_all_tracers
+
+                        wait_for_all_tracers()
+                    except Exception:
+                        LOGGER.exception("Could not flush LangSmith trace queue")
 
                     snapshot = graph.get_state(
                         {"configurable": {"thread_id": thread_id}}
