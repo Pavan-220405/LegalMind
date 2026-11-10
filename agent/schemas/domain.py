@@ -4,12 +4,18 @@ from pydantic import BaseModel, Field
 
 
 class LegalCitation(BaseModel):
-    source_id: str = Field(description="An ID from the supplied source list, such as S1.")
-    proposition: str = Field(description="The legal point supported by this source.")
+    source_id: str = Field(
+        default="",
+        description="An ID from the supplied source list, such as S1.",
+    )
+    proposition: str = Field(
+        default="",
+        description="The legal point supported by this source.",
+    )
 
 
 class SubAgentOutput(BaseModel):
-    summary: str
+    summary: str = ""
     legal_information: list[str] = Field(
         default_factory=list,
         description="Relevant law supported by supplied sources; empty when none applies.",

@@ -8,8 +8,11 @@ from pydantic import BaseModel, Field
 class SupervisorOutput(BaseModel):
     """Issue facts and routing decision extracted from the current turn."""
 
-    issue_title: str = Field(description="Short title for the user's legal issue.")
+    # Model output is sometimes incomplete when facts are unclear. Defaults keep
+    # omitted fields from turning an otherwise useful response into a validation error.
+    issue_title: str = Field(default="", description="Short title for the user's legal issue.")
     problem_statement: str = Field(
+        default="",
         description="A concise, neutral summary using only provided facts."
     )
     timeline_raw: str = Field(
@@ -39,17 +42,18 @@ class SupervisorOutput(BaseModel):
     domain: Literal[
         "rent", "consumer", "wages", "legal_notice", "general", "uncertain"
     ] = Field(
+        default="uncertain",
         description=(
             "Use uncertain when the facts do not support a confident classification. "
             "Use general only for a known issue outside supported domains."
         )
     )
-    domain_confidence: Literal["high", "low"]
-    extraction_confidence: Literal["high", "low"]
+    domain_confidence: Literal["high", "low"] = "low"
+    extraction_confidence: Literal["high", "low"] = "low"
     action_needed: Literal[
         "legal_notice", "complaint", "reply", "application", "advice"
-    ]
-    clarification_needed: bool
+    ] = "advice"
+    clarification_needed: bool = False
     clarification_question: str = Field(
         default="",
         description="One focused question when clarification is needed; otherwise empty."

@@ -14,8 +14,8 @@ def bind_structured_output(chat_model: Any, schema: type[Any]) -> Any:
 
     Groq's function-calling mode can fail when a model replies in prose instead
     of emitting the forced tool call. GPT-OSS supports Groq's JSON Schema output
-    mode. Use best-effort schema mode so fields with Pydantic defaults stay
-    optional, while Pydantic continues to validate the required fields.
+    mode. Use best-effort schema mode so fields with Pydantic defaults can be
+    omitted by the model without failing validation.
     """
 
     if (

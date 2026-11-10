@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class DraftOutput(BaseModel):
     drafted_document: str = Field(
+        default="",
         description="The requested draft, with clear placeholders for unknown facts."
     )
     send_to: str = Field(
