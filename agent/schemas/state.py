@@ -69,4 +69,5 @@ class BaseState(TypedDict, total=False):
     send_via: str
     compliance_flag: bool
     compliance_notes: str
+    section_correction_notes: str
     final_response: str

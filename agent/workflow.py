@@ -17,6 +17,7 @@ from agent.nodes.drafting import build_drafting_node
 from agent.nodes.general import build_general_fallback_agent
 from agent.nodes.rent import build_rent_agent
 from agent.nodes.safety import detect_safety_route, safety_response_node
+from agent.nodes.section_correction import section_correction_node
 from agent.nodes.supervisor import build_supervisor_node
 from agent.nodes.wages import build_wages_agent
 from agent.retriever.retrieval import retrieve_documents
@@ -75,6 +76,7 @@ def build_legal_workflow(
     graph.add_node("general", build_general_fallback_agent(domain_model))
     graph.add_node("drafting", build_drafting_node(drafting_model))
     graph.add_node("compliance", compliance_node)
+    graph.add_node("section_correction", section_correction_node)
     graph.add_node("conversation", build_conversation_node(conversation_model))
 
     graph.add_edge(START, "record_user_turn")
@@ -100,7 +102,8 @@ def build_legal_workflow(
     for domain_node in ("rent", "consumer", "wages", "general"):
         graph.add_edge(domain_node, "drafting")
     graph.add_edge("drafting", "compliance")
-    graph.add_edge("compliance", "conversation")
+    graph.add_edge("compliance", "section_correction")
+    graph.add_edge("section_correction", "conversation")
     graph.add_edge("conversation", END)
     return graph.compile(checkpointer=checkpointer)
 
