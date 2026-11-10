@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import atexit
 import hashlib
 import logging
 import os
@@ -17,35 +16,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# Load local .env values for LangSmith's own SDK (which reads os.environ), then
-# let process variables and Streamlit secrets take precedence. Importing config
-# constructs its Pydantic Settings singleton immediately, so doing this afterward
-# would leave the singleton with stale .env values for the life of the process.
-try:
-    from dotenv import dotenv_values
-
-    for _secret_name, _secret_value in dotenv_values(PROJECT_ROOT / ".env").items():
-        if _secret_value is not None:
-            os.environ.setdefault(_secret_name, _secret_value)
-except Exception:
-    pass
-for _secret_name in (
-    "LANGSMITH_TRACING",
-    "LANGSMITH_API_KEY",
-    "LANGSMITH_ENDPOINT",
-    "LANGSMITH_PROJECT",
-    "LANGSMITH_WORKSPACE_ID",
+# Disable optional LangSmith tracing for this user-facing app, even when the
+# hosting environment has tracing variables configured globally.
+for _tracing_variable in (
+    "LANGSMITH_TRACING", "LANGSMITH_API_KEY", "LANGSMITH_ENDPOINT",
+    "LANGSMITH_PROJECT", "LANGSMITH_WORKSPACE_ID", "LANGCHAIN_TRACING_V2",
 ):
-    try:
-        _secret_value = st.secrets.get(_secret_name)
-    except Exception:
-        _secret_value = None
-    if _secret_value is not None and str(_secret_value).strip():
-        os.environ[_secret_name] = str(_secret_value).strip()
-if os.getenv("LANGSMITH_TRACING"):
-    os.environ["LANGCHAIN_TRACING_V2"] = os.environ["LANGSMITH_TRACING"]
-
-from config import settings
+    os.environ.pop(_tracing_variable, None)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -67,20 +44,8 @@ def start_new_conversation(session_state: MutableMapping[str, Any]) -> str:
     session_state["thread_id"] = thread_id
     session_state.pop("attached_pdf_text", None)
     session_state.pop("attached_pdf_name", None)
+    session_state.pop("last_used_pdf_hash", None)
     return thread_id
-
-
-def get_thread_id_for_mode(
-    session_state: MutableMapping[str, Any], mode: str
-) -> str:
-    """Keep one thread per session and checkpoint backend."""
-
-    previous_mode = session_state.get("checkpoint_mode")
-    if previous_mode is not None and previous_mode != mode:
-        start_new_conversation(session_state)
-        session_state["checkpoint_mode_changed"] = True
-    session_state["checkpoint_mode"] = mode
-    return get_or_create_thread_id(session_state)
 
 
 @st.cache_resource(show_spinner=False)
@@ -93,17 +58,6 @@ def _get_memory_graph() -> Any:
     return build_legal_workflow(supervisor_model=model, checkpointer=MemorySaver())
 
 
-@st.cache_resource(show_spinner=False)
-def _get_postgres_graph(database_url: str) -> Any:
-    from agent.workflow import create_chat_model, postgres_workflow
-
-    model = create_chat_model()
-    workflow_context = postgres_workflow(database_url=database_url, chat_model=model)
-    graph = workflow_context.__enter__()
-    atexit.register(workflow_context.__exit__, None, None, None)
-    return graph
-
-
 def _pdf_text(upload: Any) -> tuple[str, bool]:
     """Use the repository's mixed digital/scanned PDF extraction pipeline."""
 
@@ -113,54 +67,6 @@ def _pdf_text(upload: Any) -> tuple[str, bool]:
         path = Path(temp_dir) / "upload.pdf"
         path.write_bytes(upload.getvalue())
         return extract_document_text(path)
-
-
-def _stream_turn_with_langsmith(
-    graph: Any,
-    *,
-    thread_id: str,
-    user_message: str,
-    uploaded_pdf_text: str,
-    turn_type: str,
-) -> Any:
-    """Run the graph under an explicit LangSmith client when tracing is enabled."""
-
-    from agent.workflow import stream_turn
-
-    enabled = os.getenv("LANGSMITH_TRACING", "").strip().lower() in {
-        "true", "1", "yes", "on"
-    }
-    api_key = os.getenv("LANGSMITH_API_KEY", "").strip()
-    if not enabled or not api_key:
-        yield from stream_turn(
-            graph,
-            thread_id=thread_id,
-            user_message=user_message,
-            uploaded_pdf_text=uploaded_pdf_text,
-            turn_type=turn_type,
-        )
-        return
-
-    import langsmith as ls
-
-    client = ls.Client(
-        api_key=api_key,
-        api_url=os.getenv("LANGSMITH_ENDPOINT", "").strip() or None,
-    )
-    project = os.getenv("LANGSMITH_PROJECT", "").strip() or None
-    with ls.tracing_context(
-        enabled=True,
-        client=client,
-        project_name=project,
-        metadata={"thread_id": thread_id},
-    ):
-        yield from stream_turn(
-            graph,
-            thread_id=thread_id,
-            user_message=user_message,
-            uploaded_pdf_text=uploaded_pdf_text,
-            turn_type=turn_type,
-        )
 
 
 def _message_text(content: Any) -> str:
@@ -256,80 +162,41 @@ def _render_history(graph: Any, thread_id: str) -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="AI Lawyer Pipeline", page_icon="⚖️", layout="wide")
-    st.title("AI Lawyer — pipeline playground")
-    st.caption(
-        "Try intake, domain routing, retrieval, drafting, compliance, and follow-up turns. "
-        "Pipeline activity is shown under each response."
-    )
-
-    with st.sidebar:
-        with st.expander("LangSmith tracing diagnostics", expanded=False):
-            tracing_enabled = os.getenv("LANGSMITH_TRACING", "").strip().lower() in {
-                "true", "1", "yes", "on"
-            }
-            api_key = os.getenv("LANGSMITH_API_KEY", "").strip()
-            endpoint = os.getenv("LANGSMITH_ENDPOINT", "").strip()
-            project = os.getenv("LANGSMITH_PROJECT", "").strip()
-            st.write(f"Tracing enabled: {'yes' if tracing_enabled else 'no'}")
-            st.write(f"API key configured: {'yes' if api_key else 'no'}")
-            st.write(f"Endpoint configured: {'yes' if endpoint else 'no (US default)'}")
-            st.write(f"Project: {project or '(default project)'}")
-            if api_key:
-                if st.button("Verify LangSmith connection", key="verify_langsmith"):
-                    try:
-                        from langsmith import Client
-
-                        client = Client(api_url=endpoint or None, api_key=api_key)
-                        # The SDK's info property makes a request and validates
-                        # authentication, endpoint reachability, and workspace.
-                        _ = client.info
-                        project_found = True
-                        if project:
-                            projects = list(client.list_projects(name=project, limit=1))
-                            project_found = bool(projects)
-                    except Exception as exc:
-                        st.error(
-                            "LangSmith verification failed "
-                            f"({type(exc).__name__}). Check the key, workspace/region, "
-                            "and Streamlit Cloud logs; the secret value is not shown."
-                        )
-                    else:
-                        st.success("LangSmith accepted the configured credentials.")
-                        if project and not project_found:
-                            st.info(
-                                "That project does not exist yet. Run one app query; "
-                                "LangSmith should create it when the first trace arrives."
-                            )
+    st.set_page_config(page_title="LegalMind AI", page_icon="⚖️", layout="wide")
+    st.markdown("""
+    <style>
+      :root { --ink:#18243b; --muted:#627087; --accent:#b58a47; }
+      .stApp { background: linear-gradient(145deg,#fbfaf7 0%,#f3f0e8 100%); color:var(--ink); }
+      [data-testid="stSidebar"] { background:#f0ede5; border-right:1px solid #e2ddd1; }
+      [data-testid="stSidebar"] > div:first-child { padding-top:2rem; }
+      .brand-mark { color:var(--accent); font-size:1rem; letter-spacing:.24em; font-weight:700; }
+      .hero { padding:2.1rem 0 1.2rem; border-bottom:1px solid #e4dfd4; margin-bottom:1.6rem; }
+      .hero h1 { color:var(--ink); font-size:2.5rem; letter-spacing:-.045em; margin:.35rem 0 .4rem; }
+      .hero p { color:var(--muted); font-size:1.03rem; margin:0; }
+      [data-testid="stChatMessage"] { border-radius:16px; border:1px solid #ebe6dc; box-shadow:0 5px 20px #29334a0a; }
+      [data-testid="stChatInput"] { border-color:#d8d1c3; border-radius:14px; }
+      .stButton > button { border-radius:10px; border-color:#d9d2c5; color:var(--ink); }
+      .stButton > button[kind="primary"] { background:#1c2941; border-color:#1c2941; color:white; }
+      [data-testid="stFileUploader"] { background:#fffefa; border:1px dashed #c9b78f; border-radius:12px; }
+    </style>
+    <div class="hero"><div class="brand-mark">LEGALMIND · AI</div>
+      <h1>LegalMind AI</h1>
+      <p>Clear, practical legal guidance, grounded in your documents.</p></div>
+    """, unsafe_allow_html=True)
 
     if "thread_id" not in st.session_state:
         get_or_create_thread_id(st.session_state)
 
     with st.sidebar:
-        st.header("Conversation")
-        mode = st.radio(
-            "Checkpoint storage",
-            ("PostgreSQL (persistent)", "In-memory demo (temporary)"),
-            index=1,
-            key="checkpoint_mode_widget",
-            help=(
-                "In-memory mode is ready for a local pipeline check and clears when "
-                "the process stops. PostgreSQL keeps threads across restarts when its "
-                "database exists and is reachable."
-            ),
-        )
-        thread_id = get_thread_id_for_mode(st.session_state, mode)
-        if st.session_state.pop("checkpoint_mode_changed", False):
-            st.info("Storage mode changed, so a new conversation thread was started.")
-        st.caption("Thread ID (managed by this Streamlit session)")
-        st.code(thread_id, language=None)
+        st.markdown('<div class="brand-mark">LEGALMIND · AI</div>', unsafe_allow_html=True)
+        st.caption("Your private legal workspace")
         if st.button("New conversation", use_container_width=True):
             start_new_conversation(st.session_state)
             st.rerun()
 
-        st.divider()
-        st.subheader("Attach a PDF")
-        upload = st.file_uploader("PDF evidence", type=["pdf"], key="pdf_upload")
+        upload = st.file_uploader(
+            "Add a PDF", type=["pdf"], key="pdf_upload", help="PDF files up to 10 MB"
+        )
         if upload is None:
             st.session_state.pop("last_used_pdf_hash", None)
         if upload is not None:
@@ -351,52 +218,16 @@ def main() -> None:
                 except Exception as exc:
                     st.error(f"PDF extraction failed ({type(exc).__name__}).")
         if st.session_state.get("attached_pdf_text"):
-            st.caption(f"Ready for the next message: {st.session_state['attached_pdf_name']}")
-            if st.button("Remove attached PDF", use_container_width=True):
-                st.session_state.pop("attached_pdf_text", None)
-                st.session_state.pop("attached_pdf_name", None)
-                if upload is not None:
-                    st.session_state["last_used_pdf_hash"] = upload_hash
-                else:
-                    st.session_state.pop("last_used_pdf_hash", None)
-                st.rerun()
-            if upload is not None and st.button(
-                "Use this PDF again", use_container_width=True
-            ):
-                st.session_state.pop("last_used_pdf_hash", None)
-                st.rerun()
-        elif (
-            upload is not None
-            and st.session_state.get("last_used_pdf_hash") == upload_hash
-            and st.button("Attach selected PDF again", use_container_width=True)
-        ):
-            st.session_state.pop("last_used_pdf_hash", None)
-            st.rerun()
+            st.caption(f"PDF ready: {st.session_state['attached_pdf_name']}")
 
-    if mode == "PostgreSQL (persistent)":
-        database_url = (settings.database_url or "").strip()
-        if not database_url:
-            st.error("Set DATABASE_URL in the project .env file before using PostgreSQL mode.")
-            st.stop()
-        try:
-            with st.spinner("Opening the PostgreSQL workflow…"):
-                graph = _get_postgres_graph(database_url)
-        except Exception as exc:
-            st.error(
-                "Could not open PostgreSQL workflow "
-                f"({type(exc).__name__}). Confirm the database named in DATABASE_URL "
-                "exists and the server is running. You can use in-memory demo mode meanwhile."
-            )
-            st.stop()
-    else:
-        try:
-            with st.spinner("Loading the model and workflow…"):
-                graph = _get_memory_graph()
-        except Exception as exc:
-            st.error(f"Could not initialize the workflow ({type(exc).__name__}).")
-            st.stop()
+    thread_id = get_or_create_thread_id(st.session_state)
+    try:
+        with st.spinner("Preparing your legal workspace…"):
+            graph = _get_memory_graph()
+    except Exception as exc:
+        st.error(f"Could not initialize the workflow ({type(exc).__name__}).")
+        st.stop()
 
-    thread_id = get_thread_id_for_mode(st.session_state, mode)
     _render_history(graph, thread_id)
 
     prompt = st.chat_input("Describe the issue or ask a follow-up")
@@ -422,7 +253,9 @@ def main() -> None:
                         for message in prior_messages
                     )
                     turn_type = "followup" if prior_messages else "new_problem"
-                    for event in _stream_turn_with_langsmith(
+                    from agent.workflow import stream_turn
+
+                    for event in stream_turn(
                         graph,
                         thread_id=thread_id,
                         user_message=prompt,
@@ -459,16 +292,6 @@ def main() -> None:
                             )
                             if payload.get("error") is not None:
                                 raise payload["error"]
-
-                    # LangChain sends traces on a background queue. Drain it
-                    # before Streamlit completes the request so short-lived
-                    # hosted workers don't drop the final trace batch.
-                    try:
-                        from langchain_core.tracers.langchain import wait_for_all_tracers
-
-                        wait_for_all_tracers()
-                    except Exception:
-                        LOGGER.exception("Could not flush LangSmith trace queue")
 
                     snapshot = graph.get_state(
                         {"configurable": {"thread_id": thread_id}}

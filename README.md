@@ -129,7 +129,7 @@ with postgres_workflow() as graph:
     print(result["final_response"])
 ```
 
-### Streamlit pipeline playground
+### LegalMind AI
 
 Run the interactive pipeline check from the repository root:
 
@@ -137,12 +137,10 @@ Run the interactive pipeline check from the repository root:
 streamlit run frontend/app.py
 ```
 
-The Streamlit browser session creates and retains its own thread ID. **New
-conversation** generates a different ID. The app opens in temporary in-memory
-mode so you can try the pipeline immediately; choose PostgreSQL for durable
-checkpoints once the configured database exists and is reachable. In-memory
-checkpoints are cleared when the app process stops. The sidebar shows Chroma
-collection counts; ingest the legal PDFs first if the collections are empty.
+The app provides a new-conversation control and PDF attachment (up to 10 MB).
+Conversation state uses a temporary in-memory checkpoint and is cleared when
+the server process stops. Ingest the legal PDFs first if the retrieval
+collections are empty.
 
 Conversation messages use LangGraph's `messages` reducer and are persisted in
 the checkpoint; there is no separate manually maintained history field. The
