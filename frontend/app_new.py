@@ -64,14 +64,20 @@ def start_new_conversation(session_state: MutableMapping[str, Any]) -> str:
     return thread_id
 
 
-@st.cache_resource(show_spinner=False)
 def _get_memory_graph() -> Any:
+    """Keep the graph per browser session, not in Streamlit's global cache."""
+    graph_key = "_legal_workflow_graph"
+    if graph_key in st.session_state:
+        return st.session_state[graph_key]
+
     from langgraph.checkpoint.memory import MemorySaver
 
     from agent.workflow import build_legal_workflow, create_chat_model
 
     model = create_chat_model()
-    return build_legal_workflow(supervisor_model=model, checkpointer=MemorySaver())
+    graph = build_legal_workflow(supervisor_model=model, checkpointer=MemorySaver())
+    st.session_state[graph_key] = graph
+    return graph
 
 
 def _pdf_text(upload: Any) -> tuple[str, bool]:

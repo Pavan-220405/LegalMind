@@ -14,6 +14,13 @@ from agent.schemas.state import BaseState
 RetrieveFn = Callable[..., list[Document]]
 
 
+def _is_json_validation_error(exc: Exception) -> bool:
+    """Recognize provider errors caused by malformed structured output."""
+    body = getattr(exc, "body", None)
+    error = body.get("error", {}) if isinstance(body, dict) else {}
+    return error.get("code") == "json_validate_failed"
+
+
 def _query_for(state: BaseState) -> str:
     return "\n".join(
         part
@@ -72,12 +79,29 @@ def build_domain_agent(
             f"Extraction confidence: {state.get('extraction_confidence', 'low')}\n"
             f"Urgency: {state.get('urgency', 'normal')}"
         )
-        response = structured_model.invoke(
-            [
-                SystemMessage(content=DOMAIN_ANALYSIS_PROMPT.format(domain=domain)),
-                HumanMessage(content=f"Facts:\n{facts}\n\nLegal excerpts:\n{excerpts}"),
-            ]
-        )
+        messages = [
+            SystemMessage(content=DOMAIN_ANALYSIS_PROMPT.format(domain=domain)),
+            HumanMessage(content=f"Facts:\n{facts}\n\nLegal excerpts:\n{excerpts}"),
+        ]
+        try:
+            response = structured_model.invoke(messages)
+        except Exception as exc:
+            # Some provider responses fail JSON Schema validation despite the
+            # constrained-output request. Retry once with an explicit repair
+            # instruction; preserve the original context and schema binding.
+            if not _is_json_validation_error(exc):
+                raise
+            messages.append(
+                HumanMessage(
+                    content=(
+                        "Your previous response did not match the required structured "
+                        "output. Return only a valid object matching the requested "
+                        "schema. Use empty lists and an empty summary if needed; do "
+                        "not add unsupported legal claims."
+                    )
+                )
+            )
+            response = structured_model.invoke(messages)
         output = (
             response
             if isinstance(response, SubAgentOutput)

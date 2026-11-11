@@ -83,29 +83,45 @@ def start_debate_practice(session_state: MutableMapping[str, Any]) -> str:
     return thread_id
 
 
-@st.cache_resource(show_spinner=False)
 def _get_memory_graph() -> Any:
+    """Return this browser session's graph without Streamlit's global cache.
+
+    The graph must live across Streamlit reruns because its MemorySaver stores
+    conversation checkpoints. Keeping it in session state isolates it per user.
+    """
+    graph_key = "_legal_workflow_graph"
+    if graph_key in st.session_state:
+        return st.session_state[graph_key]
+
     from langgraph.checkpoint.memory import MemorySaver
 
     from agent.workflow import build_legal_workflow, create_chat_model
 
     model = create_chat_model()
-    return build_legal_workflow(supervisor_model=model, checkpointer=MemorySaver())
+    graph = build_legal_workflow(supervisor_model=model, checkpointer=MemorySaver())
+    st.session_state[graph_key] = graph
+    return graph
 
 
-@st.cache_resource(show_spinner=False)
 def _get_debate_graph() -> Any:
+    """Return this browser session's debate graph across Streamlit reruns."""
+    graph_key = "_debate_workflow_graph"
+    if graph_key in st.session_state:
+        return st.session_state[graph_key]
+
     from langgraph.checkpoint.memory import MemorySaver
 
     from agent.debate_agent import build_debate_workflow
     from agent.workflow import create_chat_model
 
     model = create_chat_model()
-    return build_debate_workflow(
+    graph = build_debate_workflow(
         supervisor_model=model,
         debate_model=model,
         checkpointer=MemorySaver(),
     )
+    st.session_state[graph_key] = graph
+    return graph
 
 
 def _pdf_text(upload: Any) -> tuple[str, bool]:

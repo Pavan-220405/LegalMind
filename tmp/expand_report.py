@@ -1,4 +1,6 @@
 from docx import Document
+import zipfile
+import xml.etree.ElementTree as ET
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_CELL_VERTICAL_ALIGNMENT
@@ -6,7 +8,50 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
 PATH = r"F:\AI_Lawyer\output\docx\legalmind-solution-report-academic.docx"
-doc = Document(PATH)
+with zipfile.ZipFile(PATH) as zf:
+    root = ET.fromstring(zf.read('word/document.xml'))
+ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+original = []
+for node in root.findall('.//w:body/w:p', ns):
+    value = ''.join(t.text or '' for t in node.findall('.//w:t', ns)).strip()
+    if value:
+        original.append(value)
+doc = Document()
+for sec in doc.sections:
+    sec.top_margin = Inches(0.72); sec.bottom_margin = Inches(0.72)
+doc.styles['Normal'].font.name = 'Cambria'
+doc.styles['Normal'].font.size = Pt(10.5)
+doc.styles['Normal'].paragraph_format.space_after = Pt(5)
+doc.styles['Normal'].paragraph_format.line_spacing = 1.08
+doc.styles['Title'].font.name = 'Cambria'; doc.styles['Title'].font.size = Pt(24)
+doc.styles['Title'].font.bold = True
+doc.styles['Subtitle'].font.name = 'Cambria'; doc.styles['Subtitle'].font.size = Pt(12)
+headings = {
+    'Abstract', '1. Problem selection and assumptions', '2. Corpus preparation and retrieval',
+    '3. Agent architecture and user experience', '4. Technology stack and state',
+    '5. LangSmith observability', '6. Evaluation, scaling, and limitations',
+    '7. Anti-hallucination design', '8. Limits and failure modes',
+}
+for i, value in enumerate(original):
+    if value.startswith('Cohere is the reranker used by the project configuration'):
+        value = ('The repository exposes Cohere and Voyage reranker integrations. The checked-in Settings '
+                 'defaults name Voyage rerank-3-lite, while README examples describe Cohere rerank-v5.0-fast; '
+                 'environment configuration can override both. The exact active provider and model therefore '
+                 'depend on the runtime .env or process environment. Reranking compares candidates with the '
+                 'original question, reorders them, and returns up to six documents by default. It cannot verify '
+                 'current legal status, jurisdictional fit, or legal entailment.')
+    if value.startswith('Keywords:'):
+        value = value.replace('Cohere reranking', 'cross-encoder reranking')
+    if i == 0:
+        doc.add_paragraph(value, style='Title')
+    elif i == 1:
+        doc.add_paragraph(value, style='Subtitle')
+    elif value in headings:
+        doc.add_heading(value, level=1)
+    elif value == 'System workflows, observability, and evaluation':
+        doc.add_heading(value, level=2)
+    else:
+        doc.add_paragraph(value)
 
 # Correct over-specific configuration statements in the original report.
 for p in doc.paragraphs:
