@@ -61,6 +61,25 @@ def start_new_conversation(session_state: MutableMapping[str, Any]) -> str:
     session_state.pop("attached_pdf_text", None)
     session_state.pop("attached_pdf_name", None)
     session_state.pop("last_used_pdf_hash", None)
+    session_state["active_mode"] = "legal"
+    return thread_id
+
+
+def get_or_create_debate_thread_id(session_state: MutableMapping[str, Any]) -> str:
+    thread_id = session_state.get("debate_thread_id")
+    if not thread_id:
+        thread_id = uuid4().hex
+        session_state["debate_thread_id"] = thread_id
+    return str(thread_id)
+
+
+def start_debate_practice(session_state: MutableMapping[str, Any]) -> str:
+    thread_id = uuid4().hex
+    session_state["debate_thread_id"] = thread_id
+    session_state["active_mode"] = "debate"
+    session_state.pop("attached_pdf_text", None)
+    session_state.pop("attached_pdf_name", None)
+    session_state.pop("last_used_pdf_hash", None)
     return thread_id
 
 
@@ -72,6 +91,21 @@ def _get_memory_graph() -> Any:
 
     model = create_chat_model()
     return build_legal_workflow(supervisor_model=model, checkpointer=MemorySaver())
+
+
+@st.cache_resource(show_spinner=False)
+def _get_debate_graph() -> Any:
+    from langgraph.checkpoint.memory import MemorySaver
+
+    from agent.debate_agent import build_debate_workflow
+    from agent.workflow import create_chat_model
+
+    model = create_chat_model()
+    return build_debate_workflow(
+        supervisor_model=model,
+        debate_model=model,
+        checkpointer=MemorySaver(),
+    )
 
 
 def _pdf_text(upload: Any) -> tuple[str, bool]:
@@ -92,22 +126,30 @@ def _stream_turn_with_langsmith(
     user_message: str,
     uploaded_pdf_text: str,
     turn_type: str,
+    debate_mode: bool = False,
 ) -> Any:
     """Emit a LangSmith run for the workflow when tracing is configured."""
 
-    from agent.workflow import stream_turn
+    if debate_mode:
+        from agent.debate_agent.workflow import stream_debate_turn
+
+        stream_fn = stream_debate_turn
+    else:
+        from agent.workflow import stream_turn
+
+        stream_fn = stream_turn
 
     enabled = os.getenv("LANGSMITH_TRACING", "").strip().lower() in {
         "true", "1", "yes", "on"
     }
     api_key = os.getenv("LANGSMITH_API_KEY", "").strip()
     if not enabled or not api_key:
-        yield from stream_turn(
+        yield from stream_fn(
             graph,
             thread_id=thread_id,
             user_message=user_message,
-            uploaded_pdf_text=uploaded_pdf_text,
             turn_type=turn_type,
+            **({} if debate_mode else {"uploaded_pdf_text": uploaded_pdf_text}),
         )
         return
 
@@ -124,12 +166,12 @@ def _stream_turn_with_langsmith(
         project_name=project,
         metadata={"thread_id": thread_id},
     ):
-        yield from stream_turn(
+        yield from stream_fn(
             graph,
             thread_id=thread_id,
             user_message=user_message,
-            uploaded_pdf_text=uploaded_pdf_text,
             turn_type=turn_type,
+            **({} if debate_mode else {"uploaded_pdf_text": uploaded_pdf_text}),
         )
 
 
@@ -152,6 +194,9 @@ _STAGE_LABELS = {
     "safety_check": "Safety screening",
     "safety_response": "Returning safety guidance",
     "supervisor": "Supervisor — extracting facts and routing the issue",
+    "rent_debate": "Rent & tenancy debate practice",
+    "consumer_debate": "Consumer protection debate practice",
+    "wages_debate": "Wages debate practice",
     "rent": "Rent retriever + specialist analysis",
     "consumer": "Consumer retriever + specialist analysis",
     "wages": "Wages retriever + specialist analysis",
@@ -242,6 +287,10 @@ def main() -> None:
       .stButton > button { border-radius:10px; border-color:#d9d2c5; color:var(--ink); }
       .stButton > button[kind="primary"] { background:#1c2941; border-color:#1c2941; color:white; }
       [data-testid="stFileUploader"] { background:#fffefa; border:1px dashed #c9b78f; border-radius:12px; }
+      .debate-panel { background:#e6eff0; border:1px solid #c8dadd; border-left:5px solid #547d84; border-radius:14px; padding:1rem 1.2rem; margin:0 0 1.2rem; }
+      .debate-panel .eyebrow { color:#547d84; font-size:.72rem; font-weight:700; letter-spacing:.16em; text-transform:uppercase; margin-bottom:.35rem; }
+      .debate-panel h2 { color:#203c45; font-size:1.45rem; margin:0 0 .35rem; }
+      .debate-panel p { color:#405961; margin:0; }
     </style>
     <div class="hero"><div class="brand-mark">LEGALMIND · AI</div>
       <h1>LegalMind AI</h1>
@@ -250,6 +299,7 @@ def main() -> None:
 
     if "thread_id" not in st.session_state:
         get_or_create_thread_id(st.session_state)
+    st.session_state.setdefault("active_mode", "legal")
 
     with st.sidebar:
         st.markdown('<div class="brand-mark">LEGALMIND · AI</div>', unsafe_allow_html=True)
@@ -270,10 +320,33 @@ def main() -> None:
         if st.button("New conversation", use_container_width=True):
             start_new_conversation(st.session_state)
             st.rerun()
-
-        upload = st.file_uploader(
-            "Add a PDF", type=["pdf"], key="pdf_upload", help="PDF files up to 10 MB"
+        if st.button(
+            "Debate practice",
+            use_container_width=True,
+            type="primary" if st.session_state.get("active_mode") == "debate" else "secondary",
+        ):
+            start_debate_practice(st.session_state)
+            st.rerun()
+        st.caption(
+            "Practice is available for rent and tenancy, consumer protection, "
+            "and wages. More legal areas and practice features are coming."
         )
+
+        debate_active = st.session_state.get("active_mode") == "debate"
+        upload = st.file_uploader(
+            "Add a PDF",
+            type=["pdf"],
+            key="pdf_upload",
+            disabled=debate_active,
+            help=(
+                "Debate Practice uses the legal knowledge base."
+                if debate_active
+                else "PDF files up to 10 MB"
+            ),
+        )
+        if debate_active:
+            upload = None
+            st.session_state.pop("last_used_pdf_hash", None)
         if upload is None:
             st.session_state.pop("last_used_pdf_hash", None)
         if upload is not None:
@@ -297,17 +370,38 @@ def main() -> None:
         if st.session_state.get("attached_pdf_text"):
             st.caption(f"PDF ready: {st.session_state['attached_pdf_name']}")
 
-    thread_id = get_or_create_thread_id(st.session_state)
+    debate_mode = st.session_state.get("active_mode") == "debate"
+    thread_id = (
+        get_or_create_debate_thread_id(st.session_state)
+        if debate_mode
+        else get_or_create_thread_id(st.session_state)
+    )
     try:
-        with st.spinner("Preparing your legal workspace…"):
-            graph = _get_memory_graph()
+        with st.spinner("Preparing debate practice…" if debate_mode else "Preparing your legal workspace…"):
+            graph = _get_debate_graph() if debate_mode else _get_memory_graph()
     except Exception as exc:
         st.error(f"Could not initialize the workflow ({type(exc).__name__}).")
         st.stop()
 
+    if debate_mode:
+        st.markdown(
+            """
+            <section class="debate-panel">
+              <div class="eyebrow">Practice mode</div>
+              <h2>Debate Practice</h2>
+              <p>You’ll argue your chosen position. The AI will take the opposing side using retrieved legal sources. It will clarify the setup before debate begins. Type “coach me” for guidance.</p>
+            </section>
+            """,
+            unsafe_allow_html=True,
+        )
+
     _render_history(graph, thread_id)
 
-    prompt = st.chat_input("Describe the issue or ask a follow-up")
+    prompt = st.chat_input(
+        "Describe the issue and your side to practise"
+        if debate_mode
+        else "Describe the issue or ask a follow-up"
+    )
     if prompt:
         st.chat_message("user").markdown(prompt)
         pdf_text = st.session_state.get("attached_pdf_text", "")
@@ -336,6 +430,7 @@ def main() -> None:
                         user_message=prompt,
                         uploaded_pdf_text=pdf_text,
                         turn_type=turn_type,
+                        debate_mode=debate_mode,
                     ):
                         if not isinstance(event, dict):
                             continue

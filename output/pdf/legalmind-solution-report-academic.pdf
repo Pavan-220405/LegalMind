@@ -1,0 +1,150 @@
+%PDF-1.4
+1 0 obj
+<</Type/Catalog/Pages 2 0 R>>
+endobj
+2 0 obj
+<</Type/Pages/Kids[3 0 R 5 0 R]/Count 2>>
+endobj
+3 0 obj
+<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<</Font<</F1 4 0 R/F2 6 0 R/F3 7 0 R>>>>/Contents 8 0 R>>
+endobj
+4 0 obj
+<</Type/Font/Subtype/Type1/BaseFont/Helvetica/Encoding/WinAnsiEncoding>>
+endobj
+5 0 obj
+<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<</Font<</F1 4 0 R/F2 6 0 R/F3 7 0 R>>>>/Contents 9 0 R>>
+endobj
+6 0 obj
+<</Type/Font/Subtype/Type1/BaseFont/Helvetica-Bold/Encoding/WinAnsiEncoding>>
+endobj
+7 0 obj
+<</Type/Font/Subtype/Type1/BaseFont/Helvetica-Bold/Encoding/WinAnsiEncoding>>
+endobj
+8 0 obj
+<</Length 6569>>
+stream
+q 0.08 0.23 0.34 rg BT /F3 20 Tf 48 756 Td (LegalMind AI Architecture and Evaluation) Tj ET Q
+q 0.08 0.50 0.60 rg BT /F1 9.8 Tf 48 729 Td (Solution report | India-focused legal information and debate practice) Tj ET Q
+q 0.08 0.34 0.45 rg BT /F2 12 Tf 48 712 Td (Abstract) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 692 Td (LegalMind AI is a prototype that combines retrieval-augmented legal information with a separate) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 680.7 Td (debate-practice agent. It addresses the first-step information gap in routine tenancy, consumer, and wage) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 669.4 Td (disputes. The design constrains retrieval by domain, combines semantic and lexical search, preserves source) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 658.1 Td (metadata, and uses explicit LangGraph workflows for intake, response generation, and coaching. This report) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 646.8 Td (describes implemented components, operating assumptions, evaluation plans, scaling requirements, and known) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 635.5 Td (failure modes. The system is not independently validated legal advice.) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 8.5 Tf 48 619.2 Td (Keywords: legal RAG; hybrid retrieval; multi-query retrieval; Cohere reranking; LangGraph; LangSmith; India) Tj ET Q
+q 0.08 0.34 0.45 rg BT /F2 12 Tf 48 601.7 Td (1. Problem selection and assumptions) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 581.7 Td (We selected everyday disputes such as an unreturned rental deposit, a defective purchase, or unpaid wages) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 570.5 Td (because people often need to understand the next practical step before they can reach a lawyer or authority.) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 559.3 Td (The product turns a narrative into a structured issue, retrieves legal passages from a bounded corpus,) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 548.1 Td (explains possible options, and can prepare a draft or let the user practise an argument. We chose a narrow,) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 536.9 Td (evidence-first assistant over an open-domain legal chatbot because source coverage, jurisdiction, and) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 525.7 Td (uncertainty are central to legal usefulness.) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 510.5 Td (The current domain lanes are rent and tenancy, consumer protection, and wages. India is the default country) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 499.3 Td (context, but state law, forum, contract terms, dates, commencement, and facts may change an answer. The) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 488.1 Td (included PDFs are working sources rather than a guarantee of current, complete or authoritative law. The) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 476.9 Td (assistant provides information and practice, not representation; consequential filings, deadlines, and) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 465.7 Td (notices require qualified local review. The interface is text-based and is not yet multilingual or) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 454.5 Td (voice-enabled.) Tj ET Q
+q 0.08 0.34 0.45 rg BT /F2 12 Tf 48 439.3 Td (2. Corpus preparation and retrieval) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 419.3 Td (The ingestion pipeline extracts text from legal PDFs, invokes OCR for scanned material, applies conservative) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 408.1 Td (cleaning, classifies material by legal domain, and creates structure-aware chunks. Chunks are written to) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 396.9 Td (persistent Chroma collections with deterministic IDs and source, page, section, and document metadata.) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 385.7 Td (Re-ingestion skips unchanged sources and replaces changed chunks. The BM25 lexical index is reconstructed) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 374.5 Td (from persistent chunks on demand and invalidated when collection content changes.) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 359.3 Td (Multi-query retrieval is an optional recall step. A configured small language model produces three) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 348.1 Td (alternative phrasings beside the original query, helping bridge ordinary descriptions and statutory) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 336.9 Td (language. The implementation rejects duplicate or invalid rewrites and protects factual tokens such as) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 325.7 Td (section references, years, dates, amounts, and durations from being dropped. Each query runs domain-scoped) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 314.5 Td (retrieval; results are merged and deduplicated with stable chunk IDs.) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 299.3 Td (Hybrid retrieval combines BGE-M3 dense embeddings in Chroma with BM25 keyword search. Dense search can) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 288.1 Td (recover conceptually similar passages when wording differs; BM25 helps with exact statutory names, section) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 276.9 Td (labels, and phrases. LangChain EnsembleRetriever combines the ranked lists using reciprocal-rank fusion with) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 265.7 Td (default equal weights \(0.5/0.5\), producing up to 20 candidates. The selected legal domain controls the) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 254.5 Td (collection; a query does not search across all legal areas.) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 239.3 Td (Cohere is the reranker used by the project configuration. It compares each candidate with the original) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 228.1 Td (question, reorders by query-passage relevance, and returns up to six documents by default. Relevance scores) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 216.9 Td (and provenance metadata are retained. Reranking reduces noise after recall-oriented retrieval, but it cannot) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 205.7 Td (verify a current legal status of a statute, jurisdictional fit, or legal entailment. If no useful passage is) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 194.5 Td (retrieved, the answer path should abstain from domain-specific claims.) Tj ET Q
+q 0.40 0.46 0.51 rg BT /F1 7 Tf 48 27 Td (LEGALMIND AI | SOLUTION REPORT) Tj ET Q
+q 0.40 0.46 0.51 rg BT /F1 7 Tf 520 27 Td (PAGE 1 OF 2) Tj ET Q
+
+endstream
+endobj
+9 0 obj
+<</Length 7594>>
+stream
+q 0.08 0.23 0.34 rg BT /F3 19 Tf 48 756 Td (System workflows, observability, and evaluation) Tj ET Q
+q 0.08 0.34 0.45 rg BT /F2 12 Tf 48 729 Td (3. Agent architecture and user experience) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 709 Td (The normal legal-help StateGraph checks safety, uses a structured supervisor to classify issues, clarifies) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 697.8 Td (low-confidence routing, and routes supported domains to retrieval nodes. Drafting precedes citation,) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 686.6 Td (urgency, limitation, and section-reference checks; then the conversation node responds.) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 671.4 Td (A separate graph confirms the issue and user position, routes to rent, consumer, or wages, retrieves) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 660.2 Td (excerpts, and argues the opposing side. It keeps turn history, switches to coaching on request, and abstains) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 649 Td (if no relevant excerpt is found.) Tj ET Q
+q 0.08 0.34 0.45 rg BT /F2 12 Tf 48 633.8 Td (4. Technology stack and state) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 613.8 Td (Python, LangChain, LangGraph, Chroma, BM25, BGE-M3, Pydantic, and Streamlit form the core stack. Groq or) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 602.6 Td (Google chat models are configurable. PyMuPDF, OCRmyPDF, Tesseract, and Pillow support PDFs. PostgreSQL) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 591.4 Td (checkpointing is available for durable normal-workflow state.) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 576.2 Td (Streamlit provides Legal Help and Debate Practice modes, new conversations, PDF uploads up to 10 MB,) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 565 Td (streamed progress, citations, and compliance notices. UI state is in memory and cleared when the process) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 553.799999999999 Td (stops; PostgreSQL is optional for the normal graph, while debate defaults to memory.) Tj ET Q
+q 0.08 0.34 0.45 rg BT /F2 12 Tf 48 538.599999999999 Td (5. LangSmith observability) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 518.599999999999 Td (Optional LangSmith tracing wraps both streamed graphs when configured with a tracing flag, API key, and) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 507.399999999999 Td (optional project or endpoint. Thread metadata helps inspect node paths, latency, and exceptions. Trace) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 496.199999999999 Td (content may contain legal narratives or PDF text, so access and retention need controls. Traces diagnose) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 484.999999999999 Td (behavior but do not prove accuracy.) Tj ET Q
+q 0.08 0.34 0.45 rg BT /F2 12 Tf 48 469.799999999999 Td (6. Evaluation, scaling, and limitations) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 449.799999999999 Td (Repository cases cover exact and semantic retrieval across domains, compare dense, BM25, and hybrid search,) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 438.6 Td (and check collection isolation and provenance. The debate case checks setup, routing, source-grounded) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 427.4 Td (opposition, continuity, coaching, and abstention. These are plans, not measured results. Next, create) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 416.2 Td (expert-labelled source/query sets and report citation entailment, recall, abstention, latency, and cost; add) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 405 Td (regression and adversarial suites.) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 389.8 Td (Expand through versioned, expert-reviewed central and state sources with effective dates and) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 378.6 Td (jurisdiction-aware routing. Release each new domain only after coverage gates. Monitor retrieval quality,) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 367.4 Td (unsupported claims, freshness, safety escalations, latency, and cost; restrict sensitive-data access and) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 356.2 Td (retention and offer human review.) Tj ET Q
+q 0.08 0.34 0.45 rg BT /F2 12 Tf 48 341 Td (7. Anti-hallucination design) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 321 Td (The domain prompt says retrieved excerpts are the only source for statutory propositions, requires) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 309.8 Td (uncertainty, and forbids invented facts, deadlines, sections, jurisdictions, or citations. Intake preserves) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 298.6 Td (relative timeline wording and asks for clarification when routing is uncertain; drafting uses stated or) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 287.4 Td (explicitly extracted facts and placeholders for missing details. Domain agents assign source IDs from) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 276.2 Td (retrieved passages and discard IDs not in that list. The compliance checker flags unmatched IDs or uncited) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 265 Td (legal information, adds limitation warnings, and flags urgency. The section corrector changes an unsupported) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 253.8 Td (section number only when one retrieved section is unambiguous; otherwise it removes the number. Debate) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 242.6 Td (prompts require excerpt-grounded claims, and the empty-retrieval path abstains. These controls lower risk) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 231.4 Td (but do not test semantic entailment: a valid citation can still fail to support its sentence. A synthetic) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 220.2 Td (no-source debate probe returns: "I could not retrieve relevant legal sources in the rent and tenancy) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 209 Td (collection, so I cannot make a law-based opposing argument yet. You can narrow the issue or share the legal) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 197.8 Td (point you want to practise." The appendix records no-source, invalid-citation, and unsupported-section cases) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 186.6 Td (with deterministic raw outputs. Live model transcripts were not captured because the provider endpoint was) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 175.4 Td (unreachable.) Tj ET Q
+q 0.08 0.34 0.45 rg BT /F2 12 Tf 48 160.2 Td (8. Limits and failure modes) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 140.2 Td (Failure modes include OCR or source errors, query drift, reranker misordering, jurisdiction ambiguity, and) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 129 Td (fluent unsupported claims. Compliance checks citation IDs, deadlines, and urgency but does not establish) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 117.8 Td (entailment; limitation rules remain incomplete. Independent legal validation has not been established. Human) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 9.2 Tf 48 106.6 Td (review is required before consequential action.) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 8.2 Tf 48 91.3999999999998 Td (Implementation map: agent/prompts/domain.py; agent/nodes/compliance.py; agent/nodes/section_correction.py;) Tj ET Q
+q 0.14 0.23 0.30 rg BT /F1 8.2 Tf 48 81.3999999999998 Td (agent/workflow.py; frontend/app.py. Test cases and deterministic raw outputs: docs/anti_hallucination_eval.md.) Tj ET Q
+q 0.40 0.46 0.51 rg BT /F1 7 Tf 48 27 Td (LEGALMIND AI | SOLUTION REPORT) Tj ET Q
+q 0.40 0.46 0.51 rg BT /F1 7 Tf 520 27 Td (PAGE 2 OF 2) Tj ET Q
+
+endstream
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000054 00000 n 
+0000000111 00000 n 
+0000000241 00000 n 
+0000000329 00000 n 
+0000000459 00000 n 
+0000000552 00000 n 
+0000000645 00000 n 
+0000007264 00000 n 
+trailer<</Size 10/Root 1 0 R>>
+startxref
+14908
+%%EOF

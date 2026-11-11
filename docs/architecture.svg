@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
+<title id="title">LegalMind AI architecture</title><desc id="desc">Architecture of the LegalMind AI legal-help and debate-practice application, showing document ingestion, hybrid retrieval, agent workflows, LangSmith tracing, and response.</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#547789"/></marker><style>.bg{fill:#f6f9fb}.box{fill:#fff;stroke:#bfd0d9;stroke-width:2;rx:14}.blue{fill:#e8f2f7;stroke:#74a3b6}.teal{fill:#e7f4f1;stroke:#6ca89c}.gold{fill:#fff5e2;stroke:#d7ae63}.title{font:700 30px Arial;fill:#18384d}.sub{font:700 19px Arial;fill:#1f526c}.body{font:16px Arial;fill:#314b5b}.small{font:14px Arial;fill:#526c7a}.edge{fill:none;stroke:#547789;stroke-width:3;marker-end:url(#arrow)}.dash{fill:none;stroke:#7d9eac;stroke-width:2;stroke-dasharray:8 7;marker-end:url(#arrow)}</style></defs>
+<rect class="bg" x="0" y="0" width="1440" height="900" rx="20"/>
+<text class="title" x="48" y="58">LegalMind AI | System architecture</text>
+<text class="small" x="48" y="88">Python · LangChain · LangGraph · Chroma · Streamlit</text>
+<!-- UI -->
+<rect class="box blue" x="55" y="130" width="265" height="130"/><text class="sub" x="82" y="168">Streamlit application</text><text class="body" x="82" y="200">Legal help + PDF upload</text><text class="body" x="82" y="226">Debate practice mode</text>
+<!-- graph split -->
+<rect class="box" x="385" y="115" width="450" height="210"/><text class="sub" x="415" y="153">Normal legal-help graph</text><text class="body" x="415" y="185">Safety check ? structured supervisor</text><text class="body" x="415" y="214">Clarify or route: rent / consumer / wages</text><text class="body" x="415" y="243">General fallback ? drafting ? compliance</text><text class="body" x="415" y="272">Section correction ? response</text><text class="small" x="415" y="302">LangGraph StateGraph · thread checkpointing</text>
+<rect class="box teal" x="385" y="370" width="450" height="200"/><text class="sub" x="415" y="408">Debate-practice graph</text><text class="body" x="415" y="440">Safety check ? setup / confirmation supervisor</text><text class="body" x="415" y="469">Route to rent / consumer / wages vertical</text><text class="body" x="415" y="498">Retrieve excerpts ? opposing argument</text><text class="body" x="415" y="527">Continue turn or switch to coaching</text><text class="small" x="415" y="550">LangGraph StateGraph · in-memory checkpoint</text>
+<!-- retrieval -->
+<rect class="box gold" x="900" y="130" width="480" height="250"/><text class="sub" x="930" y="168">Domain-scoped retrieval</text><text class="body" x="930" y="201">Original query + optional 3 LLM rewrites</text><text class="body" x="930" y="230">Dense Chroma (BGE-M3) + BM25</text><text class="body" x="930" y="259">Weighted reciprocal-rank fusion (0.5 / 0.5)</text><text class="body" x="930" y="288">Stable chunk-ID deduplication</text><text class="body" x="930" y="317">Cohere Rerank -> top 6</text><text class="small" x="930" y="348">Source, page, section and score metadata retained</text>
+<!-- evidence store -->
+<rect class="box" x="900" y="430" width="220" height="150"/><text class="sub" x="925" y="468">Chroma</text><text class="body" x="925" y="498">Persistent domain</text><text class="body" x="925" y="523">collections</text><text class="small" x="925" y="555">consumer · rent · wages</text>
+<rect class="box" x="1160" y="430" width="220" height="150"/><text class="sub" x="1185" y="468">Legal PDFs</text><text class="body" x="1185" y="498">Extract / OCR</text><text class="body" x="1185" y="523">clean / chunk</text><text class="small" x="1185" y="555">metadata + chunk IDs</text>
+<!-- observability/persistence -->
+<rect class="box blue" x="55" y="650" width="405" height="155"/><text class="sub" x="85" y="690">LangSmith (optional)</text><text class="body" x="85" y="722">Traces both graphs when enabled</text><text class="body" x="85" y="751">Inspect runs, node paths, latency, errors</text><text class="small" x="85" y="781">Project and API key configured by environment</text>
+<rect class="box" x="515" y="650" width="405" height="155"/><text class="sub" x="545" y="690">Conversation state</text><text class="body" x="545" y="722">Normal graph: memory in UI; PostgreSQL option</text><text class="body" x="545" y="751">Debate graph: in-memory checkpoint by default</text><text class="small" x="545" y="781">Opaque thread IDs keep turns linked</text>
+<rect class="box teal" x="975" y="650" width="405" height="155"/><text class="sub" x="1005" y="690">Quality and safety boundary</text><text class="body" x="1005" y="722">Source IDs · deadline caution · urgency flags</text><text class="body" x="1005" y="751">Abstain when excerpts are absent</text><text class="small" x="1005" y="781">Human review for consequential legal steps</text>
+<!-- arrows -->
+<path class="edge" d="M320 190 H385"/><path class="edge" d="M320 222 H350 V470 H385"/>
+<path class="edge" d="M835 205 H900"/><path class="edge" d="M835 470 H870 V300 H900"/>
+<path class="edge" d="M1160 505 H1120"/><path class="edge" d="M1270 430 V380"/>
+<path class="dash" d="M610 325 V650"/><path class="dash" d="M610 570 V650"/>
+<text class="small" x="1085" y="618">PDF ingestion pipeline ?</text>
+</svg>
+
+

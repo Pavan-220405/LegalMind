@@ -1,8 +1,13 @@
 # Legal PDF ingestion and retrieval
 
-This repository provides the document-ingestion and retrieval foundation for
-the legal RAG system. Domain agents, routing, legal answer generation, and
-drafting are intentionally outside this layer.
+This repository contains the ingestion, retrieval, legal-help, and debate-practice workflows for LegalMind AI. It combines domain-scoped legal RAG with two LangGraph agents and a Streamlit interface.
+
+
+## System architecture
+
+The diagram summarizes the two LangGraph workflows, retrieval path, observability, and state boundaries.
+
+![LegalMind AI architecture](docs/architecture.svg)
 
 ## Install
 
@@ -12,7 +17,6 @@ uv pip install -r requirements.txt
 
 The vector database is persistent local Chroma. The first embedding and query
 expansion calls may load models. Cohere reranking requires `COHERE_API_KEY`;
-Voyage reranking requires `VOYAGE_API_KEY`.
 
 ## Configuration
 
@@ -33,9 +37,8 @@ BM25_WEIGHT=0.5
 MULTI_QUERY_ENABLED=true
 MULTI_QUERY_COUNT=3
 RERANKER_ENABLED=true
-RERANKER_PROVIDER=voyage
+RERANKER_PROVIDER=cohere
 RERANKER_MODEL=rerank-v5.0-fast
-VOYAGE_RERANKER_MODEL=rerank-3-lite
 RERANK_TOP_K=6
 HF_EMBEDDING_MODEL=BAAI/bge-m3
 LEGAL_RAG_LLM_PROVIDER=groq
@@ -81,12 +84,7 @@ results = retrieve_documents(
 Dense Chroma similarity search and a BM25 index reconstructed from persisted
 chunks are combined by LangChain `EnsembleRetriever` using weighted reciprocal
 rank fusion. Query expansion searches the original plus three LLM-generated
-alternatives and merges by stable chunk ID. The configured LangChain reranker
-reranks against the original query and returns six documents by default. Set
-Voyage Lite (`VOYAGE_RERANKER_MODEL`) is the primary reranker by default. If
-Voyage returns a rate-limit response, the pipeline retries that ranking request
-with Cohere Fast (`RERANKER_MODEL`). Other Voyage errors are surfaced. Set
-`RERANKER_PROVIDER=cohere` to use Cohere alone. BM25 is
+alternatives and merges by stable chunk ID. The Cohere reranker compares the original query with the candidate passages and returns six documents by default. Set `COHERE_API_KEY` to enable it. The repository also exposes a provider setting for compatibility, but the documented project configuration uses Cohere only. BM25 is
 rebuilt on demand after process restart and invalidated when ingestion changes
 a collection.
 
@@ -100,7 +98,7 @@ results = retrieve_documents(
 ```
 
 Lower-level components are `HybridRetriever`, `LegalMultiQueryRetriever`,
-`CohereReranker`, and `VoyageReranker` in `agent.retriever.retrieval`.
+`CohereReranker` in `agent.retriever.retrieval`.
 
 ## Legal assistance workflow
 
@@ -137,7 +135,11 @@ Run the interactive pipeline check from the repository root:
 streamlit run frontend/app.py
 ```
 
-The app provides a new-conversation control and PDF attachment (up to 10 MB).
+The app provides a new-conversation control, PDF attachment (up to 10 MB), and
+a separate Debate Practice mode for rent and tenancy, consumer protection, and
+wages. The debate supervisor clarifies the setup through normal checkpointed
+message history, then routes to one of the three retrieval-grounded vertical
+nodes. Coaching is handled inside the selected vertical node when requested.
 Conversation state uses a temporary in-memory checkpoint and is cleared when
 the server process stops. Ingest the legal PDFs first if the retrieval
 collections are empty.
@@ -163,3 +165,10 @@ rerankers; the Chroma persistence check uses an isolated temporary directory.
 The workflow integration test uses fake models and an in-memory checkpointer,
 so it does not require provider API keys or a running PostgreSQL instance.
 Manual query cases are listed in `docs/retrieval_test_cases.md`.
+
+
+
+
+
+
+
