@@ -107,6 +107,12 @@ def build_domain_agent(
             if isinstance(response, SubAgentOutput)
             else SubAgentOutput.model_validate(response)
         )
+        # Keep graph state stable even when the provider omits ambiguous fields
+        # or explicitly returns null for one of them.
+        output.summary = output.summary or ""
+        output.legal_information = output.legal_information or []
+        output.next_steps = output.next_steps or []
+        output.citations = output.citations or []
         valid_ids = {record["source_id"] for record in source_records}
         invalid_citations = [
             citation.source_id

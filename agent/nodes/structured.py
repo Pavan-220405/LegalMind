@@ -22,6 +22,11 @@ def bind_structured_output(chat_model: Any, schema: type[Any]) -> Any:
         settings.legal_rag_llm_provider == "groq"
         and settings.legal_model in _GROQ_JSON_SCHEMA_MODELS
     ):
+        # Domain analysis has nested arrays/objects and Groq's JSON Schema
+        # response has been observed arriving as token fragments through the
+        # current LangChain adapter. Tool calling returns the typed arguments.
+        if schema.__name__ == "SubAgentOutput":
+            return chat_model.with_structured_output(schema, method="function_calling")
         return chat_model.with_structured_output(
             schema,
             method="json_schema",
